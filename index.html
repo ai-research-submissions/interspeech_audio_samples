@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" href="assets/star.png" type="image/x-icon" />
+  <title>Low-Burden Data Augmentation for Dysarthric ASR</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --bg:           #fafaf8;
+      --surface:      #ffffff;
+      --surface2:     #f4f3ef;
+      --text:         #1a1a18;
+      --muted:        #6b6b62;
+      --border:       #e4e3dd;
+      --accent:       #2d6a4f;
+      --accent-light: rgba(45,106,79,.08);
+      --accent-mid:   rgba(45,106,79,.18);
+      --warm:         #c17f3a;
+      --warm-light:   rgba(193,127,58,.10);
+      --shadow-sm:    0 1px 3px rgba(26,26,24,.08), 0 1px 2px rgba(26,26,24,.06);
+      --shadow-md:    0 4px 16px rgba(26,26,24,.10), 0 2px 4px rgba(26,26,24,.06);
+      --shadow-lg:    0 12px 40px rgba(26,26,24,.12), 0 4px 8px rgba(26,26,24,.06);
+      --radius:       10px;
+      --radius-lg:    16px;
+      --focus:        0 0 0 3px rgba(45,106,79,.28);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg:           #14140f;
+        --surface:      #1e1e18;
+        --surface2:     #252520;
+        --text:         #eeeee8;
+        --muted:        #8a8a7e;
+        --border:       #38382e;
+        --accent:       #74c69d;
+        --accent-light: rgba(116,198,157,.09);
+        --accent-mid:   rgba(116,198,157,.20);
+        --warm:         #e0a060;
+        --warm-light:   rgba(224,160,96,.10);
+        --shadow-sm:    0 1px 3px rgba(0,0,0,.30);
+        --shadow-md:    0 4px 16px rgba(0,0,0,.32);
+        --shadow-lg:    0 12px 40px rgba(0,0,0,.40);
+        --focus:        0 0 0 3px rgba(116,198,157,.28);
+      }
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { height: 100%; }
+
+    body {
+      margin: 0;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 16px;
+      line-height: 1.65;
+      color: var(--text);
+      background: var(--bg);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    a { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
+    a:hover { opacity: .8; }
+
+    .skip-link {
+      position: absolute; left: -999px; top: 10px;
+      background: var(--surface); color: var(--text);
+      border: 1px solid var(--border); padding: 10px 14px;
+      border-radius: var(--radius); box-shadow: var(--shadow-sm); z-index: 9999;
+    }
+    .skip-link:focus { left: 12px; outline: none; box-shadow: var(--focus); }
+
+    /* ── Layout ── */
+    .container {
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: clamp(20px, 4vw, 56px) clamp(16px, 3vw, 32px);
+    }
+
+    /* ── Header ── */
+    header {
+      padding: clamp(40px, 6vw, 80px) 0 clamp(24px, 4vw, 48px);
+      max-width: 760px;
+    }
+
+    .eyebrow {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-size: .75rem; font-weight: 500;
+      letter-spacing: 1.2px; text-transform: uppercase;
+      color: var(--accent); margin-bottom: 16px;
+    }
+    .eyebrow::before {
+      content: '';
+      display: inline-block; width: 24px; height: 2px;
+      background: var(--accent); border-radius: 2px;
+    }
+
+    h1 {
+      font-family: 'DM Serif Display', serif;
+      font-size: clamp(2rem, 4vw, 3.2rem);
+      font-weight: 400;
+      line-height: 1.15;
+      letter-spacing: -.3px;
+      margin: 0 0 20px;
+      color: var(--text);
+    }
+
+    .subhead {
+      font-size: clamp(.95rem, 1.3vw, 1.075rem);
+      color: var(--muted);
+      max-width: 62ch;
+      margin: 0;
+      font-weight: 300;
+      line-height: 1.7;
+    }
+
+    /* ── Topbar ── */
+    .topbar {
+      position: sticky; top: 0; z-index: 20;
+      padding: 0 clamp(16px, 3vw, 32px);
+      border-bottom: 1px solid var(--border);
+      background: var(--bg);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      display: flex; align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .nav {
+      display: flex; align-items: center;
+      overflow-x: auto; scrollbar-width: none;
+      -webkit-overflow-scrolling: touch;
+    }
+    .nav::-webkit-scrollbar { display: none; }
+
+    .nav a {
+      display: inline-flex; align-items: center;
+      padding: 14px 16px;
+      border-bottom: 2px solid transparent;
+      color: var(--muted); font-weight: 400; font-size: .875rem;
+      white-space: nowrap; text-decoration: none;
+      transition: color .18s, border-color .18s;
+    }
+    .nav a:hover { color: var(--accent); }
+    .nav a[aria-current="true"] { color: var(--accent); border-bottom-color: var(--accent); }
+
+    .pill {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 5px 14px; border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--surface2);
+      color: var(--muted); font-size: .8rem; font-weight: 400;
+    }
+    .pill-review {
+      border-color: var(--warm);
+      background: var(--warm-light);
+      color: var(--warm);
+    }
+
+    @media (max-width: 600px) {
+      .topbar { padding: 0 12px; }
+      .nav a { padding: 12px 10px; font-size: .78rem; }
+    }
+
+    /* ── Sections ── */
+    .section {
+      margin-top: clamp(48px, 7vw, 88px);
+      scroll-margin-top: 88px;
+    }
+
+    .section h2 {
+      font-family: 'DM Serif Display', serif;
+      font-size: clamp(1.5rem, 2.5vw, 2rem);
+      font-weight: 400; margin: 0 0 8px;
+      color: var(--text); letter-spacing: -.2px;
+    }
+
+    .lead {
+      color: var(--muted); font-size: 1rem;
+      margin: 0 0 clamp(20px, 3vw, 32px);
+      max-width: 64ch; font-weight: 300; line-height: 1.7;
+    }
+
+    /* ── Overview card ── */
+    .overview-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-sm);
+      padding: clamp(24px, 4vw, 44px);
+    }
+
+    .overview-card p {
+      margin: 0 0 14px; color: var(--text);
+      font-weight: 300; line-height: 1.75;
+    }
+    .overview-card p:last-of-type { margin-bottom: 0; }
+    .overview-card strong { font-weight: 500; color: var(--text); }
+
+    /* ── Stats grid ── */
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0,1fr));
+      gap: 12px;
+      margin-top: clamp(20px, 3vw, 32px);
+    }
+    @media (max-width: 820px) { .stats { grid-template-columns: repeat(2,1fr); } }
+    @media (max-width: 460px) { .stats { grid-template-columns: 1fr; } }
+
+    .stat {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px 20px;
+      position: relative; overflow: hidden;
+    }
+    .stat::before {
+      content: '';
+      position: absolute; top: 0; left: 0; right: 0; height: 3px;
+      background: var(--stat-accent, var(--accent));
+      opacity: .7;
+    }
+
+    .stat .k {
+      font-size: .68rem; text-transform: uppercase;
+      letter-spacing: .8px; color: var(--muted);
+      margin-bottom: 8px; font-weight: 500;
+    }
+    .stat .v {
+      font-family: 'DM Serif Display', serif;
+      font-size: 1.65rem; color: var(--text);
+      margin: 0; line-height: 1.1; letter-spacing: -.3px;
+    }
+    .stat .s {
+      margin-top: 6px; font-size: .83rem;
+      color: var(--muted); font-weight: 300;
+    }
+
+    /* highlight band inside overview */
+    .highlight-band {
+      margin: 20px 0 0;
+      padding: 16px 20px;
+      background: var(--accent-light);
+      border-left: 3px solid var(--accent);
+      border-radius: 0 var(--radius) var(--radius) 0;
+      font-size: .95rem; color: var(--text);
+      font-weight: 300; line-height: 1.6;
+    }
+    .highlight-band strong { font-weight: 500; color: var(--accent); }
+
+    /* ── Sample cards ── */
+    .samples { display: grid; gap: 16px; }
+
+    .sample-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-sm);
+      overflow: hidden;
+      transition: box-shadow .25s ease, transform .25s ease;
+    }
+    .sample-card:hover {
+      box-shadow: var(--shadow-md);
+      transform: translateY(-1px);
+    }
+
+    .sample-grid {
+      display: grid;
+      grid-template-columns: 200px 1fr 1.15fr;
+    }
+    @media (max-width: 820px) { .sample-grid { grid-template-columns: 1fr; } }
+
+    .cell {
+      padding: clamp(16px, 3vw, 28px);
+      border-top: 1px solid var(--border);
+    }
+    .cell:first-child {
+      border-top: none;
+      border-right: 1px solid var(--border);
+      background: var(--surface2);
+    }
+    @media (max-width: 820px) { .cell:first-child { border-right: none; } }
+
+    .meta-cell {
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 12px; text-align: center; min-height: 100%;
+    }
+
+    .speaker-name {
+      font-family: 'DM Serif Display', serif;
+      font-size: 1.25rem; color: var(--text); margin: 0;
+    }
+
+    .badge {
+      display: inline-flex; align-items: center;
+      padding: 4px 14px; border-radius: 999px;
+      font-size: .78rem; font-weight: 500;
+      border: 1px solid transparent; white-space: nowrap;
+    }
+
+    .severity-mild    { background: rgba(52,199,89,.12);  color: #1a6e30;  border-color: rgba(52,199,89,.25); }
+    .severity-mod     { background: rgba(255,200,0,.14);  color: #8a6400;  border-color: rgba(255,200,0,.28); }
+    .severity-modsev  { background: rgba(255,149,0,.13);  color: #b35a00;  border-color: rgba(255,149,0,.28); }
+    .severity-severe  { background: rgba(255,59,48,.12);  color: #991010;  border-color: rgba(255,59,48,.25); }
+
+    @media (prefers-color-scheme: dark) {
+      .severity-mild   { color: #86efac; border-color: rgba(134,239,172,.3); }
+      .severity-mod    { color: #fde68a; border-color: rgba(253,230,138,.3); }
+      .severity-modsev { color: #fdba74; border-color: rgba(253,186,116,.3); }
+      .severity-severe { color: #fca5a5; border-color: rgba(252,165,165,.3); }
+    }
+
+    .label {
+      font-size: .68rem; text-transform: uppercase;
+      letter-spacing: .8px; color: var(--muted);
+      margin-bottom: 8px; font-weight: 500;
+    }
+
+    .transcript {
+      margin: 0 0 14px; color: var(--muted);
+      font-style: italic; line-height: 1.55; font-size: .95rem;
+    }
+
+    audio {
+      width: 100%; height: 36px;
+      accent-color: var(--accent);
+    }
+    audio:focus-visible {
+      outline: none; box-shadow: var(--focus); border-radius: 8px;
+    }
+
+    /* ── Section number badge ── */
+    .section-num {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 28px; height: 28px; border-radius: 50%;
+      background: var(--accent-mid); color: var(--accent);
+      font-size: .78rem; font-weight: 500;
+      margin-right: 10px; vertical-align: middle;
+      position: relative; top: -3px;
+    }
+
+    /* ── Back to top ── */
+    .back-to-top {
+      position: fixed; right: 24px; bottom: 24px; z-index: 30;
+      opacity: 0; pointer-events: none; transform: scale(.8);
+      transition: opacity .2s ease, transform .2s ease;
+    }
+    .back-to-top.show { opacity: 1; pointer-events: auto; transform: scale(1); }
+
+    .back-to-top button {
+      border: 1px solid var(--border);
+      background: var(--surface); color: var(--accent);
+      border-radius: 999px; padding: 10px 18px;
+      box-shadow: var(--shadow-lg); font-weight: 500;
+      cursor: pointer; font-size: .83rem;
+      font-family: 'DM Sans', sans-serif;
+      transition: box-shadow .18s;
+    }
+    .back-to-top button:hover { box-shadow: var(--shadow-lg), 0 0 0 1px var(--accent-mid); }
+    .back-to-top button:focus-visible { outline: none; box-shadow: var(--focus); }
+
+    /* ── Footer ── */
+    footer {
+      margin-top: clamp(56px, 8vw, 96px);
+      padding-top: 28px;
+      border-top: 1px solid var(--border);
+      color: var(--muted); text-align: center;
+      font-size: .88rem; font-weight: 300;
+    }
+    footer p { margin: 4px 0; }
+
+    /* ── Divider ── */
+    .divider {
+      height: 1px; background: var(--border);
+      margin: clamp(32px, 5vw, 56px) 0; border: none;
+    }
+
+    @media print {
+      .topbar, .back-to-top { display: none; }
+      audio { display: none; }
+    }
+  </style>
+</head>
+
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <div class="container" id="top">
+
+    <header>
+      <div class="eyebrow">Interspeech 2026 · Audio Samples</div>
+      <h1>Low-Burden Data Augmentation for&nbsp;Dysarthric ASR via Zero-Shot Voice&nbsp;Cloning</h1>
+      <p class="subhead">
+        Audio samples accompanying the submission. A lightweight approach that requires only
+        a single short reference utterance per speaker to generate diverse synthetic speech
+        for fine-tuning dysarthric ASR systems.
+      </p>
+    </header>
+
+    <div class="topbar" role="navigation" aria-label="Page navigation">
+      <nav class="nav" id="severityNav">
+        <a href="#overview"   data-target="overview">Overview</a>
+        <a href="#mild"       data-target="mild">Mild</a>
+        <a href="#moderate"   data-target="moderate">Moderate</a>
+        <a href="#modsevere"  data-target="modsevere">Mod-Severe</a>
+        <a href="#severe"     data-target="severe">Severe</a>
+      </nav>
+      <div style="display:flex;gap:8px;align-items:center;flex-shrink:0">
+        <span class="pill pill-review">Under Review</span>
+        <span class="pill">Use headphones</span>
+      </div>
+    </div>
+
+    <main id="main">
+
+      <!-- ── Overview ─────────────────────────────────────────────────── -->
+      <section class="section" id="overview" aria-label="Project overview">
+        <h2>Project Overview</h2>
+        <p class="lead">
+          Collecting dysarthric speech is labour-intensive and expensive.
+          We investigate zero-shot voice cloning as a scalable, low-burden augmentation strategy
+          that removes the speaker recording bottleneck entirely.
+        </p>
+
+        <div class="overview-card">
+          <p>
+            Dysarthric ASR systems are severely limited by data scarcity and high inter-speaker
+            variability. Traditional synthetic augmentation approaches require substantial
+            speaker-specific recordings to build a voice model, reintroducing the very collection
+            burden they aim to avoid. We address this by using <strong>zero-shot voice cloning</strong>
+            (Higgs Audio V2) to synthesise diverse training speech from a
+            <strong>single ~7-second reference utterance per speaker</strong> drawn from the
+            TORGO dataset — no additional recording sessions required.
+          </p>
+          <p>
+            We fine-tune Whisper-medium on three data configurations — clone-only, real-only,
+            and a clone+real hybrid — and evaluate on held-out real dysarthric speech across
+            all 8 TORGO speakers. Results show that clone speech alone provides a significant
+            adaptation signal, with the hybrid condition delivering the strongest gains for
+            the most challenging speaker groups.
+          </p>
+
+          <div class="highlight-band">
+            <strong>Key finding:</strong> Clone-only fine-tuning (15 h synthetic) reduces
+            overall WER from 31.62 % to 26.00 % (17.8 % relative reduction,
+            <em>p</em>&thinsp;=&thinsp;0.010). The clone+real hybrid achieves the best
+            moderate-severe group WER of 37.49 % — a <strong>31.4 % relative reduction</strong>
+            over zero-shot — from just a single reference utterance per speaker.
+          </div>
+
+          <div class="stats" aria-label="Key numbers">
+            <div class="stat">
+              <div class="k">Reference input</div>
+              <p class="v">1 utterance</p>
+              <div class="s">~7 s per speaker</div>
+            </div>
+            <div class="stat" style="--stat-accent: var(--warm)">
+              <div class="k">Synthetic data generated</div>
+              <p class="v">15h</p>
+              <div class="s">Higgs Audio V2 · 8 speakers</div>
+            </div>
+            <div class="stat">
+              <div class="k">Clone-only WER</div>
+              <p class="v">26.00 %</p>
+              <div class="s">↓ from 31.62 % zero-shot</div>
+            </div>
+            <div class="stat" style="--stat-accent: #c17f3a">
+              <div class="k">Best mod-severe WER</div>
+              <p class="v">37.49 %</p>
+              <div class="s">Hybrid · 31.4 % rel. reduction</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <hr class="divider">
+
+      <!-- ── Mild ─────────────────────────────────────────────────────── -->
+      <section class="section" id="mild" aria-label="Mild dysarthria samples">
+        <h2><span class="section-num" aria-hidden="true">1</span>Mild Dysarthria</h2>
+        <p class="lead">
+          Speakers with mild dysarthria retain relatively clear articulation with minor prosodic
+          irregularities. Cloning fidelity is generally high, producing naturalistic voice
+          characteristics with subtle preserved dysarthric traits.
+        </p>
+
+        <div class="samples">
+
+          <article class="card sample-card" aria-label="Speaker F04 samples">
+            <div class="sample-grid">
+              <div class="cell meta-cell">
+                <p class="speaker-name">F04</p>
+                <span class="badge severity-mild">Mild</span>
+              </div>
+              <div class="cell">
+                <div class="label">Reference (Input)</div>
+                <p class="transcript">"The quick brown fox jumps…"</p>
+                <audio controls aria-label="Reference audio for Speaker F04">
+                  <source src="audio/ref-f04.wav" type="audio/wav" />
+                </audio>
+              </div>
+              <div class="cell">
+                <div class="label">Cloned Output</div>
+                <p class="transcript">"The princess was the first to speak."</p>
+                <audio controls aria-label="Cloned audio for Speaker F04">
+                  <source src="audio/clone-f04.wav" type="audio/wav" />
+                </audio>
+              </div>
+            </div>
+          </article>
+
+          <article class="card sample-card" aria-label="Speaker M03 samples">
+            <div class="sample-grid">
+              <div class="cell meta-cell">
+                <p class="speaker-name">M03</p>
+                <span class="badge severity-mild">Mild</span>
+              </div>
+              <div class="cell">
+                <div class="label">Reference (Input)</div>
+                <p class="transcript">"The quick brown fox jumps over the lazy dog."</p>
+                <audio controls aria-label="Reference audio for Speaker M03">
+                  <source src="audio/ref-m03.wav" type="audio/wav" />
+                </audio>
+              </div>
+              <div class="cell">
+                <div class="label">Cloned Output</div>
+                <p class="transcript">"Play a Beatles song on Amazon music."</p>
+                <audio controls aria-label="Cloned audio for Speaker M03">
+                  <source src="audio/clone-m03.wav" type="audio/wav" />
+                </audio>
+              </div>
+            </div>
+          </article>
+
+          <article class="card sample-card" aria-label="Speaker F03 samples">
+            <div class="sample-grid">
+              <div class="cell meta-cell">
+                <p class="speaker-name">F03</p>
+                <span class="badge severity-mild">Mild</span>
+              </div>
+              <div class="cell">
+                <div class="label">Reference (Input)</div>
+                <p class="transcript">"The quick brown fox jumps…"</p>
+                <audio controls aria-label="Reference audio for Speaker F03">
+                  <source src="audio/ref-f03.wav" type="audio/wav" />
+                </audio>
+              </div>
+              <div class="cell">
+                <div class="label">Cloned Output</div>
+                <p class="transcript">"This morning he was feeling very good-natured."</p>
+                <audio controls aria-label="Cloned audio for Speaker F03">
+                  <source src="audio/clone-f03.wav" type="audio/wav" />
+                </audio>
+              </div>
+            </div>
+          </article>
+
+        </div>
+      </section>
+
+      <!-- ── Moderate ──────────────────────────────────────────────────── -->
+      <section class="section" id="moderate" aria-label="Moderate dysarthria samples">
+        <h2><span class="section-num" aria-hidden="true">2</span>Moderate Dysarthria</h2>
+        <p class="lead">
+          Consistent patterns of dysarthria with better intelligibility than severe cases.
+          The cloning model captures distinct prosodic irregularities while maintaining
+          overall speaker identity. Note that all fine-tuning conditions degrade WER
+          for this speaker relative to zero-shot, indicating a distribution mismatch
+          with the training data.
+        </p>
+
+        <div class="samples">
+          <article class="card sample-card" aria-label="Speaker M05 samples">
+            <div class="sample-grid">
+              <div class="cell meta-cell">
+                <p class="speaker-name">M05</p>
+                <span class="badge severity-mod">Moderate</span>
+              </div>
+              <div class="cell">
+                <div class="label">Reference (Input)</div>
+                <p class="transcript">"The quick brown fox jumps…"</p>
+                <audio controls aria-label="Reference audio for Speaker M05">
+                  <source src="audio/ref-m05.wav" type="audio/wav" />
+                </audio>
+              </div>
+              <div class="cell">
+                <div class="label">Cloned Output</div>
+                <p class="transcript">"Brown and Day had asked him to call again."</p>
+                <audio controls aria-label="Cloned audio for Speaker M05">
+                  <source src="audio/clone-m05.wav" type="audio/wav" />
+                </audio>
+              </div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <!-- ── Moderate-Severe ───────────────────────────────────────────── -->
+      <section class="section" id="modsevere" aria-label="Moderate-Severe dysarthria samples">
+        <h2><span class="section-num" aria-hidden="true">3</span>Moderate-Severe Dysarthria</h2>
+        <p class="lead">
+          Prosody becomes significantly laboured with noticeable breathiness, pauses, and
+          articulation errors. Clone fine-tuning is most potent here — the clone+real hybrid
+          achieves a <strong>31.4 % relative WER reduction</strong> over zero-shot for this group,
+          outperforming real-data-only fine-tuning.
+        </p>
+
+        <div class="samples">
+
+          <article class="card sample-card" aria-label="Speaker F01 samples">
+            <div class="sample-grid">
+              <div class="cell meta-cell">
+                <p class="speaker-name">F01</p>
+                <span class="badge severity-modsev">Mod-Severe</span>
+              </div>
+              <div class="cell">
+                <div class="label">Reference (Input)</div>
+                <p class="transcript">"The quick brown fox jumps…"</p>
+                <audio controls aria-label="Reference audio for Speaker F01">
+                  <source src="audio/ref-f01.wav" type="audio/wav" />
+                </audio>
+              </div>
+              <div class="cell">
+                <div class="label">Cloned Output</div>
+                <p class="transcript">"Your son told me you were ill and I came right over."</p>
+                <audio controls aria-label="Cloned audio for Speaker F01">
+                  <source src="audio/clone-f01.wav" type="audio/wav" />
+                </audio>
+              </div>
+            </div>
+          </article>
+
+          <article class="card sample-card" aria-label="Speaker M01 samples">
+            <div class="sample-grid">
+              <div class="cell meta-cell">
+                <p class="speaker-name">M01</p>
+                <span class="badge severity-modsev">Mod-Severe</span>
+              </div>
+              <div class="cell">
+                <div class="label">Reference (Input)</div>
+                <p class="transcript">"The quick brown fox jumps…"</p>
+                <audio controls aria-label="Reference audio for Speaker M01">
+                  <source src="audio/ref-m01.wav" type="audio/wav" />
+                </audio>
+              </div>
+              <div class="cell">
+                <div class="label">Cloned Output</div>
+                <p class="transcript">"What is on my calendar tomorrow?"</p>
+                <audio controls aria-label="Cloned audio for Speaker M01">
+                  <source src="audio/clone-m01.wav" type="audio/wav" />
+                </audio>
+              </div>
+            </div>
+          </article>
+
+          <article class="card sample-card" aria-label="Speaker M02 samples">
+            <div class="sample-grid">
+              <div class="cell meta-cell">
+                <p class="speaker-name">M02</p>
+                <span class="badge severity-modsev">Mod-Severe</span>
+              </div>
+              <div class="cell">
+                <div class="label">Reference (Input)</div>
+                <p class="transcript">"The quick brown fox jumps…"</p>
+                <audio controls aria-label="Reference audio for Speaker M02">
+                  <source src="audio/ref-m02.wav" type="audio/wav" />
+                </audio>
+              </div>
+              <div class="cell">
+                <div class="label">Cloned Output</div>
+                <p class="transcript">"I parked on level one."</p>
+                <audio controls aria-label="Cloned audio for Speaker M02">
+                  <source src="audio/clone-m02.wav" type="audio/wav" />
+                </audio>
+              </div>
+            </div>
+          </article>
+
+        </div>
+      </section>
+
+      <!-- ── Severe ────────────────────────────────────────────────────── -->
+      <section class="section" id="severe" aria-label="Severe dysarthria samples">
+        <h2><span class="section-num" aria-hidden="true">4</span>Severe Dysarthria</h2>
+        <p class="lead">
+          High variability, significant pauses, slurring, and unstable phonation make this
+          the most challenging group to clone. Despite reduced fidelity, real-data fine-tuning
+          achieves a <strong>26.9 % relative WER reduction</strong> for this speaker
+          (82.32 % → 60.22 %).
+        </p>
+
+        <div class="samples">
+          <article class="card sample-card" aria-label="Speaker M04 samples">
+            <div class="sample-grid">
+              <div class="cell meta-cell">
+                <p class="speaker-name">M04</p>
+                <span class="badge severity-severe">Severe</span>
+              </div>
+              <div class="cell">
+                <div class="label">Reference (Input)</div>
+                <p class="transcript">"The quick brown fox jumps…"</p>
+                <audio controls aria-label="Reference audio for Speaker M04">
+                  <source src="audio/ref-m04.wav" type="audio/wav" />
+                </audio>
+              </div>
+              <div class="cell">
+                <div class="label">Cloned Output</div>
+                <p class="transcript">"I will explain to his lordship."</p>
+                <audio controls aria-label="Cloned audio for Speaker M04">
+                  <source src="audio/clone-m04.wav" type="audio/wav" />
+                </audio>
+              </div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <footer>
+        <p>Submitted to Interspeech 2026 — currently under double-blind review.</p>
+        <p>Audio samples are provided for reviewer evaluation only.</p>
+      </footer>
+
+    </main>
+  </div>
+
+  <div class="back-to-top" id="backToTop" aria-label="Back to top">
+    <button type="button" id="backToTopBtn">↑ Top</button>
+  </div>
+
+  <script>
+    (function () {
+      const backToTop = document.getElementById("backToTop");
+      const nav       = document.getElementById("severityNav");
+      const links     = Array.from(nav.querySelectorAll("a[data-target]"));
+
+      function setCurrent(id) {
+        links.forEach(a =>
+          a.setAttribute("aria-current", a.getAttribute("data-target") === id ? "true" : "false")
+        );
+      }
+
+      function onScroll() {
+        const y = window.scrollY || document.documentElement.scrollTop;
+        backToTop.classList.toggle("show", y > 500);
+
+        const ids = ["overview","mild","moderate","modsevere","severe"];
+        let current = "overview";
+        for (const id of ids) {
+          const el = document.getElementById(id);
+          if (el && el.getBoundingClientRect().top <= 120) current = id;
+        }
+        setCurrent(current);
+      }
+
+      document.getElementById("backToTopBtn").addEventListener("click", () =>
+        window.scrollTo({ top: 0, behavior: "smooth" })
+      );
+
+      window.addEventListener("scroll", onScroll, { passive: true });
+      window.addEventListener("load", onScroll);
+    })();
+  </script>
+</body>
+</html>
