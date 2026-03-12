@@ -428,11 +428,11 @@
             burden they aim to avoid. We address this by using <strong>zero-shot voice cloning</strong>
             (Higgs Audio V2) to synthesise diverse training speech from a
             <strong>single ~7-second reference utterance per speaker</strong> drawn from the
-            TORGO dataset — no additional recording sessions required.
+            TORGO dataset, with no additional recording sessions required.
           </p>
           <p>
-            We fine-tune Whisper-medium on three data configurations — clone-only, real-only,
-            and a clone+real hybrid — and evaluate on held-out real dysarthric speech across
+            We fine-tune Whisper-medium on three data configurations, clone-only, real-only,
+            and a hybrid (clone+real), and evaluate on held-out real dysarthric speech across
             all 8 TORGO speakers. Results show that clone speech alone provides a significant
             adaptation signal, with the hybrid condition delivering the strongest gains for
             the most challenging speaker groups.
@@ -441,7 +441,7 @@
           <div class="highlight-band">
             <strong>Key finding:</strong> Clone-only fine-tuning (15 h synthetic) reduces
             overall WER from 31.62 % to 26.00 % (17.8 % relative reduction,
-            <em>p</em>&thinsp;=&thinsp;0.010). The clone+real hybrid achieves the best
+            <em>p</em>&thinsp;=&thinsp;0.010). The hybrid achieves the best
             moderate-severe group WER of 37.49 %, a <strong>31.4 % relative reduction</strong>
             over zero-shot, from just a single reference utterance per speaker.
           </div>
@@ -598,7 +598,7 @@
         <h2><span class="section-num" aria-hidden="true">3</span>Moderate-Severe Dysarthria</h2>
         <p class="lead">
           Prosody becomes significantly laboured with noticeable breathiness, pauses, and
-          articulation errors. Clone fine-tuning is most potent here — the clone+real hybrid
+          articulation errors. Clone fine-tuning is most potent here, the hybrid 
           achieves a <strong>31.4 % relative WER reduction</strong> over zero-shot for this group,
           outperforming real-data-only fine-tuning.
         </p>
